@@ -13,7 +13,7 @@ int main(argc, argv) {
 
     // loop-based with linear complexity
     if (id == 0) {
-        scanf("%d", v);
+        //scanf("%d", v);
         for (int i = 1; i < n_processes; i++) {
             MPI_Send(&v, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
         }
@@ -21,8 +21,9 @@ int main(argc, argv) {
     else {
         for (int i = 1; i < n_processes; i++)
             MPI_Recv(&v, 1, MPI_INT, 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            printf("value received: %d", v);
     }
-}
+
 MPI_Finalize();
 return 0;
 }
