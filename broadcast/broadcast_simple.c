@@ -1,6 +1,5 @@
 #include <mpi.h>
 #include <stdio.h>
-#include <string.h>
 
 int main(argc, argv) {
     int n_processes = 0;
@@ -13,17 +12,16 @@ int main(argc, argv) {
 
     // loop-based with linear complexity
     if (id == 0) {
-        //scanf("%d", v);
         for (int i = 1; i < n_processes; i++) {
+            printf("send value %d to process %d\n", v, i);
             MPI_Send(&v, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
         }
     }
     else {
-        for (int i = 1; i < n_processes; i++)
-            MPI_Recv(&v, 1, MPI_INT, 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            printf("value received: %d", v);
+        MPI_Recv(&v, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        printf("received value %d on process %d\n", v, id);
     }
 
-MPI_Finalize();
-return 0;
+    MPI_Finalize();
+    return 0;
 }

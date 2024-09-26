@@ -1,3 +1,5 @@
 # custom vscode files
-.editorconfig
 .vscode
+
+# built files
+*.out
