@@ -1,12 +1,12 @@
 #include <mpi.h>
 #include <stdio.h>
 
-int main(argc, argv) {
+int main() {
     int n_processes = 0;
     int id = 0;
     int v = 0;
 
-    MPI_Init(&argc, &argv);
+    MPI_Init(NULL, NULL);
     MPI_Comm_size(MPI_COMM_WORLD, &n_processes);
     MPI_Comm_rank(MPI_COMM_WORLD, &id);
 
@@ -16,8 +16,7 @@ int main(argc, argv) {
             printf("send value %d to process %d\n", v, i);
             MPI_Send(&v, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
         }
-    }
-    else {
+    } else {
         MPI_Recv(&v, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         printf("received value %d on process %d\n", v, id);
     }
