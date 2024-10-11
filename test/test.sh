@@ -14,6 +14,6 @@
 # get dependencies
 module load mpich-3.2
 # build
-mpicc ~/hpc/test/test.c -g -Wall -o ~/hpc/test/test
+mpicc ~/hpc/test/test.c -g -Wall -std=c99 -o ~/hpc/test/test
 # run
-mpirun.actual -n 4 ~/test/test
+mpirun.actual -n 4 ~/hpc/test/test
