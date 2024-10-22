@@ -1,14 +1,26 @@
+#include <limits.h>
 #include <mpi.h>
 #include <stdio.h>
 #include <sys/time.h>
-#include <limits.h>
+
+#define US_PER_S 1000000.0
+
+double get_timespan_s(struct timeval *start, struct timeval *end) {
+    double timespan;
+
+    // Get the number of seconds, express it in microseconds
+    timespan = (end->tv_sec - start->tv_sec) * US_PER_S;
+    // Now add the microseconds
+    timespan = (timespan + (end->tv_usec - start->tv_usec));
+
+    return timespan / US_PER_S;
+}
 
 int main() {
     int id, n;
 
     struct timeval start, end;
-    double temp_time_taken, time_taken_seconds;
-    double bandwidth;
+    double time_taken, bandwidth;
 
     int *v;
 
@@ -33,17 +45,11 @@ int main() {
 
             free(v);
 
-            // Get the number of seconds, express it in microseconds
-            temp_time_taken = (end.tv_sec - start.tv_sec) * 1e6;
-            // Now add the microseconds
-            temp_time_taken = (temp_time_taken + (end.tv_usec - start.tv_usec));
-            // convert back to seconds
-            time_taken_seconds = temp_time_taken / 1000000.0;
+            time_taken = get_timespan_s(&start, &end);
 
-            // calculate bandwidth
-            bandwidth = ((i * (sizeof(int))) / 2) / time_taken_seconds;
+            bandwidth = ((i * (sizeof(int))) / time_taken) / 2.0;
 
-            printf("%-15d %-15.6f %-12.6f\n", i, time_taken_seconds, bandwidth);
+            printf("%-15d %-15.6f %-12.6f\n", i, time_taken, bandwidth);
         } else {
             v = malloc(i * (sizeof(int)));
 
