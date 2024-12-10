@@ -233,7 +233,7 @@ void compute_pc_lists(Futoshiki* puzzle) {
         }
     }
 
-    // Filter remaining possible values using safe()
+    // Filter remaining possible values based on fixed values
     for (int row = 0; row < n; row++) {
         for (int col = 0; col < n; col++) {
             if (puzzle->pc_lengths[row][col] > 1) {
