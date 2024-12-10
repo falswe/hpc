@@ -85,81 +85,166 @@ bool safe(const Futoshiki* puzzle, int row, int col, int solution[MAX_N][MAX_N],
     return true;
 }
 
+void process_inequality_chain(Futoshiki* puzzle, int row, int col, int dir_row,
+                              int dir_col, bool check_smaller) {
+    int n = puzzle->size;
+    int chain_length = 0;
+    int curr_row = row;
+    int curr_col = col;
+
+    // Count the chain length (starting at 0)
+    while (true) {
+        int next_row = curr_row + dir_row;
+        int next_col = curr_col + dir_col;
+
+        // Check if we're still in bounds
+        if (next_row < 0 || next_row >= n || next_col < 0 || next_col >= n) {
+            break;
+        }
+
+        // Check if constraint exists and matches our direction
+        bool has_constraint = false;
+        if (dir_row == 0) {  // Horizontal chain
+            has_constraint = (check_smaller &&
+                              puzzle->h_cons[curr_row][curr_col] == SMALLER) ||
+                             (!check_smaller &&
+                              puzzle->h_cons[curr_row][curr_col] == GREATER);
+        } else {  // Vertical chain
+            has_constraint = (check_smaller &&
+                              puzzle->v_cons[curr_row][curr_col] == SMALLER) ||
+                             (!check_smaller &&
+                              puzzle->v_cons[curr_row][curr_col] == GREATER);
+        }
+
+        if (!has_constraint) {
+            break;
+        }
+
+        chain_length++;
+        curr_row = next_row;
+        curr_col = next_col;
+    }
+
+    // Process chain (even single constraints, as chain_length starts at 0)
+    curr_row = row;
+    curr_col = col;
+
+    // For each position in chain (including start position)
+    for (int pos = 0; pos <= chain_length; pos++) {
+        int forbidden_start, forbidden_end;
+
+        if (check_smaller) {
+            // For ascending chain (< < <)
+            if (pos == 0) {
+                // First cell can't be n, n-1, ..., n+1-chain_length
+                forbidden_start = n + 1 - chain_length;
+                forbidden_end = n;
+            } else if (pos == chain_length) {
+                // Last cell can't be 1, 2, ..., chain_length
+                forbidden_start = 1;
+                forbidden_end = chain_length;
+            } else {
+                // Middle cells
+                forbidden_start = 1;
+                forbidden_end = pos;
+            }
+        } else {
+            // For descending chain (> > >)
+            if (pos == 0) {
+                // First cell can't be 1, 2, ..., chain_length
+                forbidden_start = 1;
+                forbidden_end = chain_length;
+            } else if (pos == chain_length) {
+                // Last cell can't be n, n-1, ..., n+1-chain_length
+                forbidden_start = n + 1 - chain_length;
+                forbidden_end = n;
+            } else {
+                // Middle cells
+                forbidden_start = 1;
+                forbidden_end = pos;
+            }
+        }
+
+        // Inlined remove_forbidden_values function
+        for (int i = 0; i < puzzle->pc_lengths[curr_row][curr_col]; i++) {
+            int val = puzzle->pc_list[curr_row][curr_col][i];
+            if (val >= forbidden_start && val <= forbidden_end) {
+                // Remove this value by shifting remaining elements
+                for (int j = i; j < puzzle->pc_lengths[curr_row][curr_col] - 1;
+                     j++) {
+                    puzzle->pc_list[curr_row][curr_col][j] =
+                        puzzle->pc_list[curr_row][curr_col][j + 1];
+                }
+                puzzle->pc_lengths[curr_row][curr_col]--;
+                i--;  // Recheck current position as we shifted elements
+            }
+        }
+
+        // Move to next cell in chain
+        curr_row += dir_row;
+        curr_col += dir_col;
+    }
+}
+
 void compute_pc_lists(Futoshiki* puzzle) {
     int n = puzzle->size;
 
+    // Initialize pc_lists
     for (int row = 0; row < n; row++) {
         for (int col = 0; col < n; col++) {
             puzzle->pc_lengths[row][col] = 0;
 
-            // For given cells, only the given value is possible
             if (puzzle->board[row][col] != EMPTY) {
                 puzzle->pc_list[row][col][0] = puzzle->board[row][col];
                 puzzle->pc_lengths[row][col] = 1;
                 continue;
             }
 
-            // For empty cells, try all values and check constraints
+            // Initialize with all possible values
             for (int c = 1; c <= n; c++) {
-                bool valid = true;
+                puzzle->pc_list[row][col][puzzle->pc_lengths[row][col]++] = c;
+            }
+        }
+    }
 
-                // Check vertical constraints for cell ABOVE current cell
-                if (row > 0) {
-                    // If cell above has '>' constraint, current cell can't be n
-                    // because nothing could be greater than n
-                    if (puzzle->v_cons[row - 1][col] == GREATER && c >= n) {
-                        valid = false;
-                    }
-                    // If cell above has '<' constraint, current cell can't be 1
-                    // because nothing could be smaller than 1
-                    if (puzzle->v_cons[row - 1][col] == SMALLER && c <= 1) {
-                        valid = false;
-                    }
-                // Check vertical constraints for cell BELOW current cell
-                } else if (row < n - 1) {
-                    // If current cell has '>' constraint, it can't be 1
-                    // because nothing could be smaller than 1
-                    if (puzzle->v_cons[row][col] == GREATER && c <= 1) {
-                        valid = false;
-                    }
-                    // If current cell has '<' constraint, it can't be n
-                    // because nothing could be greater than n
-                    if (puzzle->v_cons[row][col] == SMALLER && c >= n) {
-                        valid = false;
+    // Process all constraints as chains
+    for (int row = 0; row < n; row++) {
+        for (int col = 0; col < n; col++) {
+            process_inequality_chain(puzzle, row, col, 0, 1,
+                                     true);  // horizontal ascending
+            process_inequality_chain(puzzle, row, col, 0, 1,
+                                     false);  // horizontal descending
+            process_inequality_chain(puzzle, row, col, 1, 0,
+                                     true);  // vertical ascending
+            process_inequality_chain(puzzle, row, col, 1, 0,
+                                     false);  // vertical descending
+        }
+    }
+
+    // Create temporary solution matrix for checking
+    int temp_solution[MAX_N][MAX_N] = {0};
+
+    // Copy fixed values (including those fixed by inequality chains)
+    for (int row = 0; row < n; row++) {
+        for (int col = 0; col < n; col++) {
+            if (puzzle->pc_lengths[row][col] == 1) {
+                temp_solution[row][col] = puzzle->pc_list[row][col][0];
+            }
+        }
+    }
+
+    // Filter remaining possible values using safe()
+    for (int row = 0; row < n; row++) {
+        for (int col = 0; col < n; col++) {
+            if (puzzle->pc_lengths[row][col] > 1) {
+                int new_length = 0;
+                for (int i = 0; i < puzzle->pc_lengths[row][col]; i++) {
+                    int c = puzzle->pc_list[row][col][i];
+                    if (safe(puzzle, row, col, temp_solution, c)) {
+                        puzzle->pc_list[row][col][new_length++] = c;
                     }
                 }
-
-                // Check horizontal constraints for cell LEFT of current cell
-                if (col > 0) {
-                    // If cell to left has '>' constraint, current cell can't be n
-                    // because nothing could be greater than n
-                    if (puzzle->h_cons[row][col - 1] == GREATER && c >= n) {
-                        valid = false;
-                    }
-                    // If cell to left has '<' constraint, current cell can't be 1
-                    // because nothing could be smaller than 1
-                    if (puzzle->h_cons[row][col - 1] == SMALLER && c <= 1) {
-                        valid = false;
-                    }
-                // Check horizontal constraints for cell RIGHT of current cell
-                } else if (col < n - 1) {
-                    // If current cell has '>' constraint, it can't be 1
-                    // because nothing could be smaller than 1
-                    if (puzzle->h_cons[row][col] == GREATER && c <= 1) {
-                        valid = false;
-                    }
-                    // If current cell has '<' constraint, it can't be n
-                    // because nothing could be greater than n
-                    if (puzzle->h_cons[row][col] == SMALLER && c >= n) {
-                        valid = false;
-                    }
-                }
-
-                // If value passes inequality constraints and general safety check
-                // (row/column uniqueness), add it to possible values
-                if (valid && safe(puzzle, row, col, puzzle->board, c)) {
-                    puzzle->pc_list[row][col][puzzle->pc_lengths[row][col]++] = c;
-                }
+                puzzle->pc_lengths[row][col] = new_length;
             }
         }
     }
