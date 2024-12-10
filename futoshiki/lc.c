@@ -13,23 +13,16 @@
 #define MAX_N 50
 #define EMPTY 0
 
-typedef enum {
-    NO_CONSTRAINT = 0,
-    GREATER_THAN = 1,
-    SMALLER_THAN = 2
-} Constraint;
+typedef enum { NO_CONS = 0, GREATER = 1, SMALLER = 2 } Constraint;
 
 typedef struct {
     int size;                 // Size of the puzzle (N)
     int board[MAX_N][MAX_N];  // The puzzle grid (0 means empty cell)
-    Constraint h_constraints[MAX_N]
-                            [MAX_N - 1];  // Horizontal inequality constraints
-    Constraint v_constraints[MAX_N - 1]
-                            [MAX_N];   // Vertical inequality constraints
-    int pc_list[MAX_N][MAX_N][MAX_N];  // Possible colors for each cell
-                                       // [row][col][possible_values]
-    int pc_lengths[MAX_N]
-                  [MAX_N];  // Length of possible colors list for each cell
+    Constraint h_cons[MAX_N][MAX_N - 1];  // Horizontal inequality constraints
+    Constraint v_cons[MAX_N - 1][MAX_N];  // Vertical inequality constraints
+    int pc_list[MAX_N][MAX_N][MAX_N];     // Possible colors for each cell
+                                          // [row][col][possible_values]
+    int pc_lengths[MAX_N][MAX_N];  // Possible colors list length for each cell
 } Futoshiki;
 
 bool safe(const Futoshiki* puzzle, int row, int col, int solution[MAX_N][MAX_N],
@@ -41,21 +34,21 @@ bool safe(const Futoshiki* puzzle, int row, int col, int solution[MAX_N][MAX_N],
 
     // Check horizontal inequality constraints
     if (col > 0) {
-        if (puzzle->h_constraints[row][col - 1] == GREATER_THAN &&
+        if (puzzle->h_cons[row][col - 1] == GREATER &&
             solution[row][col - 1] != EMPTY && solution[row][col - 1] <= c) {
             return false;
         }
-        if (puzzle->h_constraints[row][col - 1] == SMALLER_THAN &&
+        if (puzzle->h_cons[row][col - 1] == SMALLER &&
             solution[row][col - 1] != EMPTY && solution[row][col - 1] >= c) {
             return false;
         }
     }
     if (col < puzzle->size - 1) {
-        if (puzzle->h_constraints[row][col] == GREATER_THAN &&
+        if (puzzle->h_cons[row][col] == GREATER &&
             solution[row][col + 1] != EMPTY && c <= solution[row][col + 1]) {
             return false;
         }
-        if (puzzle->h_constraints[row][col] == SMALLER_THAN &&
+        if (puzzle->h_cons[row][col] == SMALLER &&
             solution[row][col + 1] != EMPTY && c >= solution[row][col + 1]) {
             return false;
         }
@@ -63,21 +56,21 @@ bool safe(const Futoshiki* puzzle, int row, int col, int solution[MAX_N][MAX_N],
 
     // Check vertical inequality constraints
     if (row > 0) {
-        if (puzzle->v_constraints[row - 1][col] == GREATER_THAN &&
+        if (puzzle->v_cons[row - 1][col] == GREATER &&
             solution[row - 1][col] != EMPTY && solution[row - 1][col] <= c) {
             return false;
         }
-        if (puzzle->v_constraints[row - 1][col] == SMALLER_THAN &&
+        if (puzzle->v_cons[row - 1][col] == SMALLER &&
             solution[row - 1][col] != EMPTY && solution[row - 1][col] >= c) {
             return false;
         }
     }
     if (row < puzzle->size - 1) {
-        if (puzzle->v_constraints[row][col] == GREATER_THAN &&
+        if (puzzle->v_cons[row][col] == GREATER &&
             solution[row + 1][col] != EMPTY && c <= solution[row + 1][col]) {
             return false;
         }
-        if (puzzle->v_constraints[row][col] == SMALLER_THAN &&
+        if (puzzle->v_cons[row][col] == SMALLER &&
             solution[row + 1][col] != EMPTY && c >= solution[row + 1][col]) {
             return false;
         }
@@ -106,20 +99,66 @@ void compute_pc_lists(Futoshiki* puzzle) {
                 continue;
             }
 
-            // For empty cells, try all values and keep valid ones
+            // For empty cells, try all values and check constraints
             for (int c = 1; c <= n; c++) {
-                int temp_solution[MAX_N][MAX_N] = {0};
+                bool valid = true;
 
-                // Copy given values to temporary solution
-                for (int i = 0; i < n; i++) {
-                    for (int j = 0; j < n; j++) {
-                        temp_solution[i][j] = puzzle->board[i][j];
+                // Check vertical constraints for cell ABOVE current cell
+                if (row > 0) {
+                    // If cell above has '>' constraint, current cell can't be n
+                    // because nothing could be greater than n
+                    if (puzzle->v_cons[row - 1][col] == GREATER && c >= n) {
+                        valid = false;
+                    }
+                    // If cell above has '<' constraint, current cell can't be 1
+                    // because nothing could be smaller than 1
+                    if (puzzle->v_cons[row - 1][col] == SMALLER && c <= 1) {
+                        valid = false;
+                    }
+                // Check vertical constraints for cell BELOW current cell
+                } else if (row < n - 1) {
+                    // If current cell has '>' constraint, it can't be 1
+                    // because nothing could be smaller than 1
+                    if (puzzle->v_cons[row][col] == GREATER && c <= 1) {
+                        valid = false;
+                    }
+                    // If current cell has '<' constraint, it can't be n
+                    // because nothing could be greater than n
+                    if (puzzle->v_cons[row][col] == SMALLER && c >= n) {
+                        valid = false;
                     }
                 }
 
-                if (safe(puzzle, row, col, temp_solution, c)) {
-                    puzzle->pc_list[row][col][puzzle->pc_lengths[row][col]++] =
-                        c;
+                // Check horizontal constraints for cell LEFT of current cell
+                if (col > 0) {
+                    // If cell to left has '>' constraint, current cell can't be n
+                    // because nothing could be greater than n
+                    if (puzzle->h_cons[row][col - 1] == GREATER && c >= n) {
+                        valid = false;
+                    }
+                    // If cell to left has '<' constraint, current cell can't be 1
+                    // because nothing could be smaller than 1
+                    if (puzzle->h_cons[row][col - 1] == SMALLER && c <= 1) {
+                        valid = false;
+                    }
+                // Check horizontal constraints for cell RIGHT of current cell
+                } else if (col < n - 1) {
+                    // If current cell has '>' constraint, it can't be 1
+                    // because nothing could be smaller than 1
+                    if (puzzle->h_cons[row][col] == GREATER && c <= 1) {
+                        valid = false;
+                    }
+                    // If current cell has '<' constraint, it can't be n
+                    // because nothing could be greater than n
+                    if (puzzle->h_cons[row][col] == SMALLER && c >= n) {
+                        valid = false;
+                    }
+                }
+
+                // If value passes inequality constraints and general safety check
+                // (row/column uniqueness), add it to possible values
+                if (valid && safe(puzzle, row, col, puzzle->board, c)) {
+                    puzzle->pc_list[row][col][puzzle->pc_lengths[row][col]++] = c;
                 }
             }
         }
@@ -161,11 +200,11 @@ void print_board(const Futoshiki* puzzle, int solution[MAX_N][MAX_N]) {
         for (int j = 0; j < puzzle->size; j++) {
             printf(" %d ", solution[i][j]);
             if (j < puzzle->size - 1) {
-                switch (puzzle->h_constraints[i][j]) {
-                    case GREATER_THAN:
+                switch (puzzle->h_cons[i][j]) {
+                    case GREATER:
                         printf(">");
                         break;
-                    case SMALLER_THAN:
+                    case SMALLER:
                         printf("<");
                         break;
                     default:
@@ -177,11 +216,11 @@ void print_board(const Futoshiki* puzzle, int solution[MAX_N][MAX_N]) {
         printf("\n");
         if (i < puzzle->size - 1) {
             for (int j = 0; j < puzzle->size; j++) {
-                switch (puzzle->v_constraints[i][j]) {
-                    case GREATER_THAN:
+                switch (puzzle->v_cons[i][j]) {
+                    case GREATER:
                         printf(" v ");
                         break;
-                    case SMALLER_THAN:
+                    case SMALLER:
                         printf(" ^ ");
                         break;
                     default:
@@ -198,20 +237,18 @@ void print_board(const Futoshiki* puzzle, int solution[MAX_N][MAX_N]) {
 
 int main() {
     // Example puzzle initialization
-    Futoshiki puzzle = {
-        .size = 4,
-        .board = {{0, 0, 0, 0},  //
-                  {0, 0, 0, 0},
-                  {0, 0, 0, 0},
-                  {0, 0, 0, 3}},
-        .h_constraints = {{NO_CONSTRAINT, NO_CONSTRAINT, NO_CONSTRAINT},
-                          {NO_CONSTRAINT, NO_CONSTRAINT, NO_CONSTRAINT},
-                          {NO_CONSTRAINT, SMALLER_THAN, SMALLER_THAN},
-                          {NO_CONSTRAINT, NO_CONSTRAINT, NO_CONSTRAINT}},
-        .v_constraints = {
-            {GREATER_THAN, NO_CONSTRAINT, GREATER_THAN, NO_CONSTRAINT},
-            {NO_CONSTRAINT, NO_CONSTRAINT, NO_CONSTRAINT, NO_CONSTRAINT},
-            {NO_CONSTRAINT, GREATER_THAN, NO_CONSTRAINT, NO_CONSTRAINT}}};
+    Futoshiki puzzle = {.size = 4,
+                        .board = {{0, 0, 0, 0},  //
+                                  {0, 0, 0, 0},
+                                  {0, 0, 0, 0},
+                                  {0, 0, 0, 3}},
+                        .h_cons = {{NO_CONS, NO_CONS, NO_CONS},
+                                   {NO_CONS, NO_CONS, NO_CONS},
+                                   {NO_CONS, SMALLER, SMALLER},
+                                   {NO_CONS, NO_CONS, NO_CONS}},
+                        .v_cons = {{GREATER, NO_CONS, GREATER, NO_CONS},
+                                   {NO_CONS, NO_CONS, NO_CONS, NO_CONS},
+                                   {NO_CONS, GREATER, NO_CONS, NO_CONS}}};
 
     printf("Initial Puzzle:\n");
     int initial_board[MAX_N][MAX_N];
