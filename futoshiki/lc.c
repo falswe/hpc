@@ -201,17 +201,11 @@ void process_inequality_chain(Futoshiki* puzzle, int row, int col, int dir_row,
 
 // Helper function to compare two pc_lists
 bool pc_lists_equal(const Futoshiki* puzzle,
-                    const int old_pc_list[MAX_N][MAX_N][MAX_N],
                     const int old_lengths[MAX_N][MAX_N]) {
     for (int row = 0; row < puzzle->size; row++) {
         for (int col = 0; col < puzzle->size; col++) {
             if (puzzle->pc_lengths[row][col] != old_lengths[row][col]) {
                 return false;
-            }
-            for (int i = 0; i < puzzle->pc_lengths[row][col]; i++) {
-                if (puzzle->pc_list[row][col][i] != old_pc_list[row][col][i]) {
-                    return false;
-                }
             }
         }
     }
@@ -245,9 +239,7 @@ void compute_pc_lists(Futoshiki* puzzle) {
         changes_made = false;
 
         // Store old pc_lists to detect changes
-        int old_pc_list[MAX_N][MAX_N][MAX_N];
         int old_lengths[MAX_N][MAX_N];
-        memcpy(old_pc_list, puzzle->pc_list, sizeof(old_pc_list));
         memcpy(old_lengths, puzzle->pc_lengths, sizeof(old_lengths));
 
         // Process all constraints as chains
@@ -276,8 +268,7 @@ void compute_pc_lists(Futoshiki* puzzle) {
             }
         }
 
-        // Filter remaining possible values based on fixed values and
-        // constraints
+        // Filter possible values based on fixed values and constraints
         for (int row = 0; row < n; row++) {
             for (int col = 0; col < n; col++) {
                 if (puzzle->pc_lengths[row][col] > 1) {
@@ -294,7 +285,7 @@ void compute_pc_lists(Futoshiki* puzzle) {
         }
 
         // Check if any changes were made
-        if (!pc_lists_equal(puzzle, old_pc_list, old_lengths)) {
+        if (!pc_lists_equal(puzzle, old_lengths)) {
             changes_made = true;
         }
     } while (changes_made);
