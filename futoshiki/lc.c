@@ -84,21 +84,50 @@ bool safe(const Futoshiki* puzzle, int row, int col, int solution[MAX_N][MAX_N],
 
     return true;
 }
+int get_min_value(const Futoshiki* puzzle, int row, int col) {
+    return puzzle->pc_list[row][col][0];  // List is always sorted
+}
+
+int get_max_value(const Futoshiki* puzzle, int row, int col) {
+    return puzzle->pc_list[row][col][puzzle->pc_lengths[row][col] - 1];
+}
+
+void remove_forbidden_values(Futoshiki* puzzle, int row, int col,
+                             int forbidden_start, int forbidden_end) {
+    for (int i = 0; i < puzzle->pc_lengths[row][col]; i++) {
+        int val = puzzle->pc_list[row][col][i];
+        if (val >= forbidden_start && val <= forbidden_end) {
+            // Remove this value by shifting remaining elements
+            for (int j = i; j < puzzle->pc_lengths[row][col] - 1; j++) {
+                puzzle->pc_list[row][col][j] = puzzle->pc_list[row][col][j + 1];
+            }
+            puzzle->pc_lengths[row][col]--;
+            i--;  // Recheck current position as we shifted elements
+        }
+    }
+}
 
 void process_inequality_chain(Futoshiki* puzzle, int row, int col, int dir_row,
                               int dir_col, bool check_smaller) {
-    int n = puzzle->size;
     int chain_length = 0;
     int curr_row = row;
     int curr_col = col;
 
-    // Count the chain length (starting at 0)
+    // First, find length of chain and store cells in the chain
+    struct {
+        int row;
+        int col;
+    } chain_cells[MAX_N];  // Can't be longer than puzzle size
+    chain_cells[0].row = row;
+    chain_cells[0].col = col;
+
     while (true) {
         int next_row = curr_row + dir_row;
         int next_col = curr_col + dir_col;
 
         // Check if we're still in bounds
-        if (next_row < 0 || next_row >= n || next_col < 0 || next_col >= n) {
+        if (next_row < 0 || next_row >= puzzle->size || next_col < 0 ||
+            next_col >= puzzle->size) {
             break;
         }
 
@@ -123,67 +152,70 @@ void process_inequality_chain(Futoshiki* puzzle, int row, int col, int dir_row,
         chain_length++;
         curr_row = next_row;
         curr_col = next_col;
+        chain_cells[chain_length].row = curr_row;
+        chain_cells[chain_length].col = curr_col;
     }
 
-    // Process chain (even single constraints, as chain_length starts at 0)
-    curr_row = row;
-    curr_col = col;
-
-    // For each position in chain (including start position)
+    // Process each cell in the chain
     for (int pos = 0; pos <= chain_length; pos++) {
-        int forbidden_start, forbidden_end;
+        int curr_row = chain_cells[pos].row;
+        int curr_col = chain_cells[pos].col;
 
-        if (check_smaller) {
-            // For ascending chain (< < <)
-            if (pos == 0) {
-                // First cell can't be n, n-1, ..., n+1-chain_length
-                forbidden_start = n + 1 - chain_length;
-                forbidden_end = n;
-            } else if (pos == chain_length) {
-                // Last cell can't be 1, 2, ..., chain_length
-                forbidden_start = 1;
-                forbidden_end = chain_length;
-            } else {
-                // Middle cells
-                forbidden_start = 1;
-                forbidden_end = pos;
+        if (check_smaller) {  // Chain of < constraints
+            if (pos < chain_length) {
+                // Current cell must be smaller than next cell's maximum
+                int next_row = chain_cells[pos + 1].row;
+                int next_col = chain_cells[pos + 1].col;
+                int next_max = get_max_value(puzzle, next_row, next_col);
+                remove_forbidden_values(puzzle, curr_row, curr_col, next_max,
+                                        puzzle->size);
             }
-        } else {
-            // For descending chain (> > >)
-            if (pos == 0) {
-                // First cell can't be 1, 2, ..., chain_length
-                forbidden_start = 1;
-                forbidden_end = chain_length;
-            } else if (pos == chain_length) {
-                // Last cell can't be n, n-1, ..., n+1-chain_length
-                forbidden_start = n + 1 - chain_length;
-                forbidden_end = n;
-            } else {
-                // Middle cells
-                forbidden_start = 1;
-                forbidden_end = pos;
+            if (pos > 0) {
+                // Current cell must be larger than previous cell's minimum
+                int prev_row = chain_cells[pos - 1].row;
+                int prev_col = chain_cells[pos - 1].col;
+                int prev_min = get_min_value(puzzle, prev_row, prev_col);
+                remove_forbidden_values(puzzle, curr_row, curr_col, 1,
+                                        prev_min);
             }
-        }
-
-        // Inlined remove_forbidden_values function
-        for (int i = 0; i < puzzle->pc_lengths[curr_row][curr_col]; i++) {
-            int val = puzzle->pc_list[curr_row][curr_col][i];
-            if (val >= forbidden_start && val <= forbidden_end) {
-                // Remove this value by shifting remaining elements
-                for (int j = i; j < puzzle->pc_lengths[curr_row][curr_col] - 1;
-                     j++) {
-                    puzzle->pc_list[curr_row][curr_col][j] =
-                        puzzle->pc_list[curr_row][curr_col][j + 1];
-                }
-                puzzle->pc_lengths[curr_row][curr_col]--;
-                i--;  // Recheck current position as we shifted elements
+        } else {  // Chain of > constraints
+            if (pos < chain_length) {
+                // Current cell must be larger than next cell's minimum
+                int next_row = chain_cells[pos + 1].row;
+                int next_col = chain_cells[pos + 1].col;
+                int next_min = get_min_value(puzzle, next_row, next_col);
+                remove_forbidden_values(puzzle, curr_row, curr_col, 1,
+                                        next_min);
+            }
+            if (pos > 0) {
+                // Current cell must be smaller than previous cell's maximum
+                int prev_row = chain_cells[pos - 1].row;
+                int prev_col = chain_cells[pos - 1].col;
+                int prev_max = get_max_value(puzzle, prev_row, prev_col);
+                remove_forbidden_values(puzzle, curr_row, curr_col, prev_max,
+                                        puzzle->size);
             }
         }
-
-        // Move to next cell in chain
-        curr_row += dir_row;
-        curr_col += dir_col;
     }
+}
+
+// Helper function to compare two pc_lists
+bool pc_lists_equal(const Futoshiki* puzzle,
+                    const int old_pc_list[MAX_N][MAX_N][MAX_N],
+                    const int old_lengths[MAX_N][MAX_N]) {
+    for (int row = 0; row < puzzle->size; row++) {
+        for (int col = 0; col < puzzle->size; col++) {
+            if (puzzle->pc_lengths[row][col] != old_lengths[row][col]) {
+                return false;
+            }
+            for (int i = 0; i < puzzle->pc_lengths[row][col]; i++) {
+                if (puzzle->pc_list[row][col][i] != old_pc_list[row][col][i]) {
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
 }
 
 void compute_pc_lists(Futoshiki* puzzle) {
@@ -207,47 +239,65 @@ void compute_pc_lists(Futoshiki* puzzle) {
         }
     }
 
-    // Process all constraints as chains
-    for (int row = 0; row < n; row++) {
-        for (int col = 0; col < n; col++) {
-            process_inequality_chain(puzzle, row, col, 0, 1,
-                                     true);  // horizontal ascending
-            process_inequality_chain(puzzle, row, col, 0, 1,
-                                     false);  // horizontal descending
-            process_inequality_chain(puzzle, row, col, 1, 0,
-                                     true);  // vertical ascending
-            process_inequality_chain(puzzle, row, col, 1, 0,
-                                     false);  // vertical descending
-        }
-    }
+    // Keep iterating until no changes are made
+    bool changes_made;
+    do {
+        changes_made = false;
 
-    // Create temporary solution matrix for checking
-    int temp_solution[MAX_N][MAX_N] = {0};
+        // Store old pc_lists to detect changes
+        int old_pc_list[MAX_N][MAX_N][MAX_N];
+        int old_lengths[MAX_N][MAX_N];
+        memcpy(old_pc_list, puzzle->pc_list, sizeof(old_pc_list));
+        memcpy(old_lengths, puzzle->pc_lengths, sizeof(old_lengths));
 
-    // Copy fixed values (including those fixed by inequality chains)
-    for (int row = 0; row < n; row++) {
-        for (int col = 0; col < n; col++) {
-            if (puzzle->pc_lengths[row][col] == 1) {
-                temp_solution[row][col] = puzzle->pc_list[row][col][0];
+        // Process all constraints as chains
+        for (int row = 0; row < n; row++) {
+            for (int col = 0; col < n; col++) {
+                process_inequality_chain(puzzle, row, col, 0, 1,
+                                         true);  // horizontal ascending
+                process_inequality_chain(puzzle, row, col, 0, 1,
+                                         false);  // horizontal descending
+                process_inequality_chain(puzzle, row, col, 1, 0,
+                                         true);  // vertical ascending
+                process_inequality_chain(puzzle, row, col, 1, 0,
+                                         false);  // vertical descending
             }
         }
-    }
 
-    // Filter remaining possible values based on fixed values
-    for (int row = 0; row < n; row++) {
-        for (int col = 0; col < n; col++) {
-            if (puzzle->pc_lengths[row][col] > 1) {
-                int new_length = 0;
-                for (int i = 0; i < puzzle->pc_lengths[row][col]; i++) {
-                    int c = puzzle->pc_list[row][col][i];
-                    if (safe(puzzle, row, col, temp_solution, c)) {
-                        puzzle->pc_list[row][col][new_length++] = c;
-                    }
+        // Create temporary solution matrix for checking
+        int temp_solution[MAX_N][MAX_N] = {0};
+
+        // Copy fixed values and guaranteed minimum values for checking
+        for (int row = 0; row < n; row++) {
+            for (int col = 0; col < n; col++) {
+                if (puzzle->pc_lengths[row][col] == 1) {
+                    temp_solution[row][col] = puzzle->pc_list[row][col][0];
                 }
-                puzzle->pc_lengths[row][col] = new_length;
             }
         }
-    }
+
+        // Filter remaining possible values based on fixed values and
+        // constraints
+        for (int row = 0; row < n; row++) {
+            for (int col = 0; col < n; col++) {
+                if (puzzle->pc_lengths[row][col] > 1) {
+                    int new_length = 0;
+                    for (int i = 0; i < puzzle->pc_lengths[row][col]; i++) {
+                        int c = puzzle->pc_list[row][col][i];
+                        if (safe(puzzle, row, col, temp_solution, c)) {
+                            puzzle->pc_list[row][col][new_length++] = c;
+                        }
+                    }
+                    puzzle->pc_lengths[row][col] = new_length;
+                }
+            }
+        }
+
+        // Check if any changes were made
+        if (!pc_lists_equal(puzzle, old_pc_list, old_lengths)) {
+            changes_made = true;
+        }
+    } while (changes_made);
 }
 
 bool color_g(Futoshiki* puzzle, int solution[MAX_N][MAX_N], int row, int col) {
