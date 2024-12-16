@@ -9,17 +9,16 @@
 typedef enum { NO_CONS = 0, GREATER = 1, SMALLER = 2 } Constraint;
 
 typedef struct {
-    int size;                 // Size of the puzzle (N)
-    int board[MAX_N][MAX_N];  // The puzzle grid (0 means empty cell)
+    int size;                             // Size of the puzzle (N)
+    int board[MAX_N][MAX_N];              // The puzzle grid (0 means empty cell)
     Constraint h_cons[MAX_N][MAX_N - 1];  // Horizontal inequality constraints
     Constraint v_cons[MAX_N - 1][MAX_N];  // Vertical inequality constraints
     int pc_list[MAX_N][MAX_N][MAX_N];     // Possible colors for each cell
                                           // [row][col][possible_values]
-    int pc_lengths[MAX_N][MAX_N];  // Possible colors list length for each cell
+    int pc_lengths[MAX_N][MAX_N];         // Possible colors list length for each cell
 } Futoshiki;
 
-bool safe(const Futoshiki* puzzle, int row, int col, int solution[MAX_N][MAX_N],
-          int color) {
+bool safe(const Futoshiki* puzzle, int row, int col, int solution[MAX_N][MAX_N], int color) {
     // If cell has a given color, only allow that color
     if (puzzle->board[row][col] != EMPTY) {
         return puzzle->board[row][col] == color;
@@ -27,25 +26,25 @@ bool safe(const Futoshiki* puzzle, int row, int col, int solution[MAX_N][MAX_N],
 
     // Check horizontal inequality constraints
     if (col > 0) {
-        if (puzzle->h_cons[row][col - 1] == GREATER &&
-            solution[row][col - 1] != EMPTY &&
+        if (puzzle->h_cons[row][col - 1] == GREATER &&  //
+            solution[row][col - 1] != EMPTY &&          //
             solution[row][col - 1] <= color) {
             return false;
         }
-        if (puzzle->h_cons[row][col - 1] == SMALLER &&
-            solution[row][col - 1] != EMPTY &&
+        if (puzzle->h_cons[row][col - 1] == SMALLER &&  //
+            solution[row][col - 1] != EMPTY &&          //
             solution[row][col - 1] >= color) {
             return false;
         }
     }
     if (col < puzzle->size - 1) {
-        if (puzzle->h_cons[row][col] == GREATER &&
-            solution[row][col + 1] != EMPTY &&
+        if (puzzle->h_cons[row][col] == GREATER &&  //
+            solution[row][col + 1] != EMPTY &&      //
             color <= solution[row][col + 1]) {
             return false;
         }
-        if (puzzle->h_cons[row][col] == SMALLER &&
-            solution[row][col + 1] != EMPTY &&
+        if (puzzle->h_cons[row][col] == SMALLER &&  //
+            solution[row][col + 1] != EMPTY &&      //
             color >= solution[row][col + 1]) {
             return false;
         }
@@ -53,25 +52,25 @@ bool safe(const Futoshiki* puzzle, int row, int col, int solution[MAX_N][MAX_N],
 
     // Check vertical inequality constraints
     if (row > 0) {
-        if (puzzle->v_cons[row - 1][col] == GREATER &&
-            solution[row - 1][col] != EMPTY &&
+        if (puzzle->v_cons[row - 1][col] == GREATER &&  //
+            solution[row - 1][col] != EMPTY &&          //
             solution[row - 1][col] <= color) {
             return false;
         }
-        if (puzzle->v_cons[row - 1][col] == SMALLER &&
-            solution[row - 1][col] != EMPTY &&
+        if (puzzle->v_cons[row - 1][col] == SMALLER &&  //
+            solution[row - 1][col] != EMPTY &&          //
             solution[row - 1][col] >= color) {
             return false;
         }
     }
     if (row < puzzle->size - 1) {
-        if (puzzle->v_cons[row][col] == GREATER &&
-            solution[row + 1][col] != EMPTY &&
+        if (puzzle->v_cons[row][col] == GREATER &&  //
+            solution[row + 1][col] != EMPTY &&      //
             color <= solution[row + 1][col]) {
             return false;
         }
-        if (puzzle->v_cons[row][col] == SMALLER &&
-            solution[row + 1][col] != EMPTY &&
+        if (puzzle->v_cons[row][col] == SMALLER &&  //
+            solution[row + 1][col] != EMPTY &&      //
             color >= solution[row + 1][col]) {
             return false;
         }
@@ -86,11 +85,10 @@ bool safe(const Futoshiki* puzzle, int row, int col, int solution[MAX_N][MAX_N],
     return true;
 }
 
-bool has_valid_neighbor(const Futoshiki* puzzle, int row, int col, int color,
-                        bool need_greater) {
+bool has_valid_neighbor(const Futoshiki* puzzle, int row, int col, int color, bool need_greater) {
     for (int i = 0; i < puzzle->pc_lengths[row][col]; i++) {
         int neighbor_color = puzzle->pc_list[row][col][i];
-        if ((need_greater && neighbor_color > color) ||
+        if ((need_greater && neighbor_color > color) ||  //
             (!need_greater && neighbor_color < color)) {
             return true;
         }
@@ -98,18 +96,19 @@ bool has_valid_neighbor(const Futoshiki* puzzle, int row, int col, int color,
     return false;
 }
 
-bool satisfies_inequalities(const Futoshiki* puzzle, int row, int col,
-                            int color) {
+bool satisfies_inequalities(const Futoshiki* puzzle, int row, int col, int color) {
     // Check horizontal constraints
     if (col > 0) {
         switch (puzzle->h_cons[row][col - 1]) {
             case GREATER:  // Left > Current
-                if (!has_valid_neighbor(puzzle, row, col - 1, color, true))
+                if (!has_valid_neighbor(puzzle, row, col - 1, color, true)) {
                     return false;
+                }
                 break;
             case SMALLER:  // Left < Current
-                if (!has_valid_neighbor(puzzle, row, col - 1, color, false))
+                if (!has_valid_neighbor(puzzle, row, col - 1, color, false)) {
                     return false;
+                }
                 break;
         }
     }
@@ -117,12 +116,14 @@ bool satisfies_inequalities(const Futoshiki* puzzle, int row, int col,
     if (col < puzzle->size - 1) {
         switch (puzzle->h_cons[row][col]) {
             case GREATER:  // Current > Right
-                if (!has_valid_neighbor(puzzle, row, col + 1, color, false))
+                if (!has_valid_neighbor(puzzle, row, col + 1, color, false)) {
                     return false;
+                }
                 break;
             case SMALLER:  // Current < Right
-                if (!has_valid_neighbor(puzzle, row, col + 1, color, true))
+                if (!has_valid_neighbor(puzzle, row, col + 1, color, true)) {
                     return false;
+                }
                 break;
         }
     }
@@ -131,12 +132,14 @@ bool satisfies_inequalities(const Futoshiki* puzzle, int row, int col,
     if (row > 0) {
         switch (puzzle->v_cons[row - 1][col]) {
             case GREATER:  // Upper > Current
-                if (!has_valid_neighbor(puzzle, row - 1, col, color, true))
+                if (!has_valid_neighbor(puzzle, row - 1, col, color, true)) {
                     return false;
+                }
                 break;
             case SMALLER:  // Upper < Current
-                if (!has_valid_neighbor(puzzle, row - 1, col, color, false))
+                if (!has_valid_neighbor(puzzle, row - 1, col, color, false)) {
                     return false;
+                }
                 break;
         }
     }
@@ -144,12 +147,14 @@ bool satisfies_inequalities(const Futoshiki* puzzle, int row, int col,
     if (row < puzzle->size - 1) {
         switch (puzzle->v_cons[row][col]) {
             case GREATER:  // Current > Lower
-                if (!has_valid_neighbor(puzzle, row + 1, col, color, false))
+                if (!has_valid_neighbor(puzzle, row + 1, col, color, false)) {
                     return false;
+                }
                 break;
             case SMALLER:  // Current < Lower
-                if (!has_valid_neighbor(puzzle, row + 1, col, color, true))
+                if (!has_valid_neighbor(puzzle, row + 1, col, color, true)) {
                     return false;
+                }
                 break;
         }
     }
@@ -182,8 +187,7 @@ void process_uniqueness(Futoshiki* puzzle, int row, int col) {
                 int new_length = 0;
                 for (int j = 0; j < puzzle->pc_lengths[row][i]; j++) {
                     if (puzzle->pc_list[row][i][j] != color) {
-                        puzzle->pc_list[row][i][new_length++] =
-                            puzzle->pc_list[row][i][j];
+                        puzzle->pc_list[row][i][new_length++] = puzzle->pc_list[row][i][j];
                     }
                 }
                 puzzle->pc_lengths[row][i] = new_length;
@@ -192,8 +196,7 @@ void process_uniqueness(Futoshiki* puzzle, int row, int col) {
                 int new_length = 0;
                 for (int j = 0; j < puzzle->pc_lengths[i][col]; j++) {
                     if (puzzle->pc_list[i][col][j] != color) {
-                        puzzle->pc_list[i][col][new_length++] =
-                            puzzle->pc_list[i][col][j];
+                        puzzle->pc_list[i][col][new_length++] = puzzle->pc_list[i][col][j];
                     }
                 }
                 puzzle->pc_lengths[i][col] = new_length;
@@ -216,8 +219,7 @@ void compute_pc_lists(Futoshiki* puzzle) {
 
             // Initialize with all possible values
             for (int color = 1; color <= puzzle->size; color++) {
-                puzzle->pc_list[row][col][puzzle->pc_lengths[row][col]++] =
-                    color;
+                puzzle->pc_list[row][col][puzzle->pc_lengths[row][col]++] = color;
             }
         }
     }
@@ -318,19 +320,51 @@ void print_board(const Futoshiki* puzzle, int solution[MAX_N][MAX_N]) {
 }
 
 int main() {
-    // Example puzzle initialization
-    Futoshiki puzzle = {.size = 4,
-                        .board = {{0, 0, 0, 0},  //
-                                  {0, 0, 0, 0},
-                                  {0, 0, 0, 0},
-                                  {0, 0, 0, 3}},
-                        .h_cons = {{NO_CONS, NO_CONS, NO_CONS},
-                                   {NO_CONS, NO_CONS, NO_CONS},
-                                   {NO_CONS, SMALLER, SMALLER},
-                                   {NO_CONS, NO_CONS, NO_CONS}},
-                        .v_cons = {{GREATER, NO_CONS, GREATER, NO_CONS},
-                                   {NO_CONS, NO_CONS, NO_CONS, NO_CONS},
-                                   {NO_CONS, GREATER, NO_CONS, NO_CONS}}};
+    // From the paper
+    // Futoshiki puzzle = {.size = 4,
+    //                     .board = {{0, 0, 0, 0},  //
+    //                               {0, 0, 0, 0},
+    //                               {0, 0, 0, 0},
+    //                               {0, 0, 0, 3}},
+    //                     .h_cons = {{NO_CONS, NO_CONS, NO_CONS},
+    //                                {NO_CONS, NO_CONS, NO_CONS},
+    //                                {NO_CONS, SMALLER, SMALLER},
+    //                                {NO_CONS, NO_CONS, NO_CONS}},
+    //                     .v_cons = {{GREATER, NO_CONS, GREATER, NO_CONS},
+    //                                {NO_CONS, NO_CONS, NO_CONS, NO_CONS},
+    //                                {NO_CONS, GREATER, NO_CONS, NO_CONS}}};
+
+    // Hard
+    Futoshiki puzzle =  //
+        {.size = 9,
+         .board = {{0, 0, 0, 0, 0, 0, 0, 0, 0},  //
+                   {0, 0, 0, 0, 5, 0, 0, 0, 0},
+                   {0, 0, 0, 0, 0, 8, 7, 0, 0},
+                   {0, 7, 0, 0, 0, 0, 2, 0, 0},
+                   {0, 0, 0, 0, 0, 0, 0, 0, 0},
+                   {0, 0, 0, 0, 0, 0, 0, 0, 0},
+                   {7, 5, 0, 0, 0, 4, 0, 0, 0},
+                   {0, 0, 0, 0, 0, 0, 0, 0, 6},
+                   {0, 0, 0, 0, 0, 0, 0, 0, 0}},
+         .h_cons =  //
+         {{SMALLER, NO_CONS, GREATER, NO_CONS, NO_CONS, NO_CONS, SMALLER, NO_CONS},
+          {NO_CONS, NO_CONS, NO_CONS, SMALLER, NO_CONS, SMALLER, NO_CONS, NO_CONS},
+          {NO_CONS, NO_CONS, NO_CONS, SMALLER, NO_CONS, NO_CONS, NO_CONS, SMALLER},
+          {NO_CONS, NO_CONS, SMALLER, SMALLER, NO_CONS, GREATER, NO_CONS, NO_CONS},
+          {NO_CONS, GREATER, NO_CONS, NO_CONS, NO_CONS, SMALLER, NO_CONS, NO_CONS},
+          {NO_CONS, NO_CONS, GREATER, NO_CONS, NO_CONS, NO_CONS, NO_CONS, NO_CONS},
+          {NO_CONS, NO_CONS, NO_CONS, NO_CONS, SMALLER, GREATER, NO_CONS, NO_CONS},
+          {NO_CONS, NO_CONS, NO_CONS, NO_CONS, GREATER, NO_CONS, NO_CONS, SMALLER},
+          {SMALLER, NO_CONS, NO_CONS, NO_CONS, NO_CONS, NO_CONS, NO_CONS, NO_CONS}},
+         .v_cons =  //
+         {{NO_CONS, NO_CONS, NO_CONS, GREATER, GREATER, GREATER, GREATER, NO_CONS, NO_CONS},
+          {NO_CONS, GREATER, GREATER, GREATER, GREATER, NO_CONS, NO_CONS, GREATER, GREATER},
+          {NO_CONS, NO_CONS, NO_CONS, NO_CONS, NO_CONS, NO_CONS, NO_CONS, NO_CONS, GREATER},
+          {SMALLER, NO_CONS, GREATER, NO_CONS, NO_CONS, SMALLER, NO_CONS, NO_CONS, NO_CONS},
+          {SMALLER, SMALLER, NO_CONS, NO_CONS, NO_CONS, NO_CONS, NO_CONS, NO_CONS, GREATER},
+          {NO_CONS, NO_CONS, NO_CONS, NO_CONS, NO_CONS, SMALLER, NO_CONS, NO_CONS, GREATER},
+          {NO_CONS, GREATER, NO_CONS, NO_CONS, NO_CONS, NO_CONS, NO_CONS, NO_CONS, NO_CONS},
+          {NO_CONS, GREATER, SMALLER, SMALLER, NO_CONS, NO_CONS, SMALLER, GREATER, SMALLER}}};
 
     printf("Initial Puzzle:\n");
     int initial_board[MAX_N][MAX_N];
