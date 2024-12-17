@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -319,78 +320,175 @@ void print_board(const Futoshiki* puzzle, int solution[MAX_N][MAX_N]) {
     printf("\n");
 }
 
-int main() {
-    // From the paper
-    // Futoshiki puzzle = {.size = 4,
-    //                     .board = {{0, 0, 0, 0},  //
-    //                               {0, 0, 0, 0},
-    //                               {0, 0, 0, 0},
-    //                               {0, 0, 0, 3}},
-    //                     .h_cons = {{NO_CONS, NO_CONS, NO_CONS},
-    //                                {NO_CONS, NO_CONS, NO_CONS},
-    //                                {NO_CONS, SMALLER, SMALLER},
-    //                                {NO_CONS, NO_CONS, NO_CONS}},
-    //                     .v_cons = {{GREATER, NO_CONS, GREATER, NO_CONS},
-    //                                {NO_CONS, NO_CONS, NO_CONS, NO_CONS},
-    //                                {NO_CONS, GREATER, NO_CONS, NO_CONS}}};
+bool parse_futoshiki(const char* input, Futoshiki* puzzle) {
+    // Initialize everything to 0/NO_CONS
+    memset(puzzle->board, 0, sizeof(puzzle->board));
+    memset(puzzle->h_cons, NO_CONS, sizeof(puzzle->h_cons));
+    memset(puzzle->v_cons, NO_CONS, sizeof(puzzle->v_cons));
 
-    // Hard
-    Futoshiki puzzle =  //
-        {.size = 9,
-         .board = {{0, 0, 0, 0, 0, 0, 0, 0, 0},  //
-                   {0, 0, 0, 0, 5, 0, 0, 0, 0},
-                   {0, 0, 0, 0, 0, 8, 7, 0, 0},
-                   {0, 7, 0, 0, 0, 0, 2, 0, 0},
-                   {0, 0, 0, 0, 0, 0, 0, 0, 0},
-                   {0, 0, 0, 0, 0, 0, 0, 0, 0},
-                   {7, 5, 0, 0, 0, 4, 0, 0, 0},
-                   {0, 0, 0, 0, 0, 0, 0, 0, 6},
-                   {0, 0, 0, 0, 0, 0, 0, 0, 0}},
-         .h_cons =  //
-         {{SMALLER, NO_CONS, GREATER, NO_CONS, NO_CONS, NO_CONS, SMALLER, NO_CONS},
-          {NO_CONS, NO_CONS, NO_CONS, SMALLER, NO_CONS, SMALLER, NO_CONS, NO_CONS},
-          {NO_CONS, NO_CONS, NO_CONS, SMALLER, NO_CONS, NO_CONS, NO_CONS, SMALLER},
-          {NO_CONS, NO_CONS, SMALLER, SMALLER, NO_CONS, GREATER, NO_CONS, NO_CONS},
-          {NO_CONS, GREATER, NO_CONS, NO_CONS, NO_CONS, SMALLER, NO_CONS, NO_CONS},
-          {NO_CONS, NO_CONS, GREATER, NO_CONS, NO_CONS, NO_CONS, NO_CONS, NO_CONS},
-          {NO_CONS, NO_CONS, NO_CONS, NO_CONS, SMALLER, GREATER, NO_CONS, NO_CONS},
-          {NO_CONS, NO_CONS, NO_CONS, NO_CONS, GREATER, NO_CONS, NO_CONS, SMALLER},
-          {SMALLER, NO_CONS, NO_CONS, NO_CONS, NO_CONS, NO_CONS, NO_CONS, NO_CONS}},
-         .v_cons =  //
-         {{NO_CONS, NO_CONS, NO_CONS, GREATER, GREATER, GREATER, GREATER, NO_CONS, NO_CONS},
-          {NO_CONS, GREATER, GREATER, GREATER, GREATER, NO_CONS, NO_CONS, GREATER, GREATER},
-          {NO_CONS, NO_CONS, NO_CONS, NO_CONS, NO_CONS, NO_CONS, NO_CONS, NO_CONS, GREATER},
-          {SMALLER, NO_CONS, GREATER, NO_CONS, NO_CONS, SMALLER, NO_CONS, NO_CONS, NO_CONS},
-          {SMALLER, SMALLER, NO_CONS, NO_CONS, NO_CONS, NO_CONS, NO_CONS, NO_CONS, GREATER},
-          {NO_CONS, NO_CONS, NO_CONS, NO_CONS, NO_CONS, SMALLER, NO_CONS, NO_CONS, GREATER},
-          {NO_CONS, GREATER, NO_CONS, NO_CONS, NO_CONS, NO_CONS, NO_CONS, NO_CONS, NO_CONS},
-          {NO_CONS, GREATER, SMALLER, SMALLER, NO_CONS, NO_CONS, SMALLER, GREATER, SMALLER}}};
+    // First, determine size by counting numbers in first row
+    char first_line[256];
+    int line_len = 0;
+    while (input[line_len] && input[line_len] != '\n') {
+        first_line[line_len] = input[line_len];
+        line_len++;
+    }
+    first_line[line_len] = '\0';
 
-    printf("Initial Puzzle:\n");
-    int initial_board[MAX_N][MAX_N];
-    memcpy(initial_board, puzzle.board, sizeof(initial_board));
-    print_board(&puzzle, initial_board);
-
-    compute_pc_lists(&puzzle);
-
-    printf("Possible colors for each cell:\n");
-    for (int row = 0; row < puzzle.size; row++) {
-        for (int col = 0; col < puzzle.size; col++) {
-            printf("Cell [%d][%d]: ", row, col);
-            for (int i = 0; i < puzzle.pc_lengths[row][col]; i++) {
-                printf("%d ", puzzle.pc_list[row][col][i]);
-            }
-            printf("\n");
+    // Count numbers in first line to determine size
+    puzzle->size = 0;
+    for (int i = 0; i < line_len; i++) {
+        if (isdigit(first_line[i]) || first_line[i] == '0') {
+            puzzle->size++;
         }
     }
 
-    int solution[MAX_N][MAX_N] = {0};
-    if (color_g(&puzzle, solution, 0, 0)) {
-        printf("\nSolution found:\n");
-        print_board(&puzzle, solution);
-    } else {
-        printf("\nNo solution exists.\n");
+    if (puzzle->size > MAX_N || puzzle->size == 0) {
+        return false;
     }
 
+    char line[256];
+    const char* line_start = input;
+    int number_row = 0;
+
+    while (*line_start) {
+        // Copy line to buffer
+        line_len = 0;
+        while (line_start[line_len] && line_start[line_len] != '\n') {
+            line[line_len] = line_start[line_len];
+            line_len++;
+        }
+        line[line_len] = '\0';
+
+        // Skip empty lines
+        if (line_len == 0 || line[0] == '\n') {
+            line_start += (line_start[0] == '\n' ? 1 : 0);
+            continue;
+        }
+
+        // Check if this is a constraint line
+        bool is_v_constraint_line = false;
+        for (int i = 0; i < line_len; i++) {
+            if (line[i] == '^' || line[i] == 'v' || line[i] == 'V') {
+                is_v_constraint_line = true;
+                break;
+            }
+        }
+
+        if (!is_v_constraint_line) {  // Number and horizontal constraint line
+            int col = 0;
+            for (int i = 0; i < line_len && col < puzzle->size; i++) {
+                if (line[i] == ' ') continue;
+
+                if (isdigit(line[i])) {
+                    puzzle->board[number_row][col] = line[i] - '0';
+                    col++;
+                } else if (line[i] == '<' && col > 0) {
+                    puzzle->h_cons[number_row][col - 1] = SMALLER;
+                } else if (line[i] == '>' && col > 0) {
+                    puzzle->h_cons[number_row][col - 1] = GREATER;
+                }
+            }
+            number_row++;
+        } else {  // Vertical constraint line
+            // Create a mapping array for character positions to grid columns
+            int col_positions[MAX_N] = {0};  // Position where each column's number would be
+            int pos = 0;
+            for (int col = 0; col < puzzle->size; col++) {
+                col_positions[col] = pos;
+                pos += (col == puzzle->size - 1) ? 0 : 4;  // 4 spaces between numbers
+            }
+
+            // Now scan the constraint line
+            for (int i = 0; i < line_len; i++) {
+                if (line[i] != '^' && line[i] != 'v' && line[i] != 'V') continue;
+
+                // Find which column this constraint is closest to
+                int col = 0;
+                for (int j = 1; j < puzzle->size; j++) {
+                    if (abs(i - col_positions[j]) < abs(i - col_positions[col])) {
+                        col = j;
+                    }
+                }
+
+                if (col < puzzle->size) {
+                    puzzle->v_cons[number_row - 1][col] = (line[i] == '^') ? SMALLER : GREATER;
+                }
+            }
+        }
+
+        line_start += line_len + (line_start[line_len] == '\n' ? 1 : 0);
+    }
+
+    return true;
+}
+
+// File reading function
+bool read_puzzle_from_file(const char* filename, Futoshiki* puzzle) {
+    FILE* file = fopen(filename, "r");
+    if (!file) {
+        printf("Error: Could not open file %s\n", filename);
+        return false;
+    }
+
+    char buffer[1024] = {0};
+    char content[1024] = {0};
+    int total_read = 0;
+
+    while (fgets(buffer, sizeof(buffer), file)) {
+        strcat(content, buffer);
+        total_read += strlen(buffer);
+        if (total_read >= sizeof(content) - 1) {
+            printf("Error: Puzzle file too large\n");
+            fclose(file);
+            return false;
+        }
+    }
+
+    fclose(file);
+    return parse_futoshiki(content, puzzle);
+}
+
+void solve_puzzle(const char* filename) {
+    Futoshiki puzzle;
+    if (read_puzzle_from_file(filename, &puzzle)) {
+        printf("Initial puzzle:\n");
+        int initial_board[MAX_N][MAX_N];
+        memcpy(initial_board, puzzle.board, sizeof(initial_board));
+        print_board(&puzzle, initial_board);
+
+        // Solve the puzzle
+        compute_pc_lists(&puzzle);
+
+        printf("\nPossible colors for each cell:\n");
+        for (int row = 0; row < puzzle.size; row++) {
+            for (int col = 0; col < puzzle.size; col++) {
+                printf("Cell [%d][%d]: ", row, col);
+                for (int i = 0; i < puzzle.pc_lengths[row][col]; i++) {
+                    printf("%d ", puzzle.pc_list[row][col][i]);
+                }
+                printf("\n");
+            }
+        }
+
+        int solution[MAX_N][MAX_N] = {0};
+        if (color_g(&puzzle, solution, 0, 0)) {
+            printf("\nSolution:\n");
+            print_board(&puzzle, solution);
+        } else {
+            printf("\nNo solution exists.\n");
+        }
+    } else {
+        printf("Failed to read or parse the puzzle.\n");
+    }
+}
+
+int main(int argc, char* argv[]) {
+    if (argc != 2) {
+        printf("Usage: %s <puzzle_file>\n", argv[0]);
+        return 1;
+    }
+
+    solve_puzzle(argv[1]);
     return 0;
 }
