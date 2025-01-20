@@ -212,13 +212,14 @@ void compute_pc_lists(Futoshiki* puzzle) {
         for (int col = 0; col < puzzle->size; col++) {
             puzzle->pc_lengths[row][col] = 0;
 
+            // Consider pre-set colors of the board
             if (puzzle->board[row][col] != EMPTY) {
                 puzzle->pc_list[row][col][0] = puzzle->board[row][col];
                 puzzle->pc_lengths[row][col] = 1;
                 continue;
             }
 
-            // Initialize with all possible values
+            // Initialize with all possible colors
             for (int color = 1; color <= puzzle->size; color++) {
                 puzzle->pc_list[row][col][puzzle->pc_lengths[row][col]++] = color;
             }
@@ -457,7 +458,6 @@ void solve_puzzle(const char* filename) {
         memcpy(initial_board, puzzle.board, sizeof(initial_board));
         print_board(&puzzle, initial_board);
 
-        // Solve the puzzle
         compute_pc_lists(&puzzle);
 
         printf("\nPossible colors for each cell:\n");
