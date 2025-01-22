@@ -3,6 +3,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/time.h>
+
+#include "comparison.h"
+#include "futoshiki.h"
 
 #define MAX_N 50
 #define EMPTY 0
@@ -206,7 +210,10 @@ void process_uniqueness(Futoshiki* puzzle, int row, int col) {
     }
 }
 
-void compute_pc_lists(Futoshiki* puzzle) {
+int compute_pc_lists(Futoshiki* puzzle, bool use_precoloring) {
+    int total_colors_removed = 0;
+    int initial_colors = 0;
+
     // Initialize pc_lists
     for (int row = 0; row < puzzle->size; row++) {
         for (int col = 0; col < puzzle->size; col++) {
@@ -216,6 +223,7 @@ void compute_pc_lists(Futoshiki* puzzle) {
             if (puzzle->board[row][col] != EMPTY) {
                 puzzle->pc_list[row][col][0] = puzzle->board[row][col];
                 puzzle->pc_lengths[row][col] = 1;
+                initial_colors += 1;  // Only count 1 since it's preset
                 continue;
             }
 
@@ -223,32 +231,39 @@ void compute_pc_lists(Futoshiki* puzzle) {
             for (int color = 1; color <= puzzle->size; color++) {
                 puzzle->pc_list[row][col][puzzle->pc_lengths[row][col]++] = color;
             }
+            initial_colors += puzzle->size;
         }
     }
 
-    bool changes;
-    do {
-        changes = false;
-        int old_lengths[MAX_N][MAX_N];
-        memcpy(old_lengths, puzzle->pc_lengths, sizeof(old_lengths));
+    if (use_precoloring) {
+        bool changes;
+        do {
+            changes = false;
+            int old_lengths[MAX_N][MAX_N];
+            memcpy(old_lengths, puzzle->pc_lengths, sizeof(old_lengths));
 
-        // Process each cell
-        for (int row = 0; row < puzzle->size; row++) {
-            for (int col = 0; col < puzzle->size; col++) {
-                filter_possible_colors(puzzle, row, col);
-                process_uniqueness(puzzle, row, col);
-            }
-        }
-
-        // Check for changes
-        for (int row = 0; row < puzzle->size; row++) {
-            for (int col = 0; col < puzzle->size; col++) {
-                if (puzzle->pc_lengths[row][col] != old_lengths[row][col]) {
-                    changes = true;
+            // Process each cell
+            for (int row = 0; row < puzzle->size; row++) {
+                for (int col = 0; col < puzzle->size; col++) {
+                    int before_length = puzzle->pc_lengths[row][col];
+                    filter_possible_colors(puzzle, row, col);
+                    process_uniqueness(puzzle, row, col);
+                    total_colors_removed += before_length - puzzle->pc_lengths[row][col];
                 }
             }
-        }
-    } while (changes);
+
+            // Check for changes
+            for (int row = 0; row < puzzle->size; row++) {
+                for (int col = 0; col < puzzle->size; col++) {
+                    if (puzzle->pc_lengths[row][col] != old_lengths[row][col]) {
+                        changes = true;
+                    }
+                }
+            }
+        } while (changes);
+    }
+
+    return total_colors_removed;
 }
 
 bool color_g(Futoshiki* puzzle, int solution[MAX_N][MAX_N], int row, int col) {
@@ -450,45 +465,65 @@ bool read_puzzle_from_file(const char* filename, Futoshiki* puzzle) {
     return parse_futoshiki(content, puzzle);
 }
 
-void solve_puzzle(const char* filename) {
+double get_time() {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return tv.tv_sec + tv.tv_usec * 1e-6;
+}
+
+SolverStats solve_puzzle(const char* filename, bool use_precoloring, bool print_details) {
+    SolverStats stats = {0};
     Futoshiki puzzle;
+
     if (read_puzzle_from_file(filename, &puzzle)) {
-        printf("Initial puzzle:\n");
-        int initial_board[MAX_N][MAX_N];
-        memcpy(initial_board, puzzle.board, sizeof(initial_board));
-        print_board(&puzzle, initial_board);
+        if (print_details) {
+            printf("Initial puzzle:\n");
+            int initial_board[MAX_N][MAX_N];
+            memcpy(initial_board, puzzle.board, sizeof(initial_board));
+            print_board(&puzzle, initial_board);
+        }
 
-        compute_pc_lists(&puzzle);
+        // Time the pre-coloring phase
+        double start_precolor = get_time();
+        stats.colors_removed = compute_pc_lists(&puzzle, use_precoloring);
+        double end_precolor = get_time();
+        stats.precolor_time = end_precolor - start_precolor;
 
-        printf("\nPossible colors for each cell:\n");
-        for (int row = 0; row < puzzle.size; row++) {
-            for (int col = 0; col < puzzle.size; col++) {
-                printf("Cell [%d][%d]: ", row, col);
-                for (int i = 0; i < puzzle.pc_lengths[row][col]; i++) {
-                    printf("%d ", puzzle.pc_list[row][col][i]);
+        if (print_details) {
+            printf("\nPossible colors for each cell:\n");
+            for (int row = 0; row < puzzle.size; row++) {
+                for (int col = 0; col < puzzle.size; col++) {
+                    printf("Cell [%d][%d]: ", row, col);
+                    for (int i = 0; i < puzzle.pc_lengths[row][col]; i++) {
+                        printf("%d ", puzzle.pc_list[row][col][i]);
+                    }
+                    printf("\n");
                 }
-                printf("\n");
             }
         }
 
+        // Time the list-coloring phase
         int solution[MAX_N][MAX_N] = {0};
-        if (color_g(&puzzle, solution, 0, 0)) {
+        double start_coloring = get_time();
+        stats.found_solution = color_g(&puzzle, solution, 0, 0);
+        double end_coloring = get_time();
+        stats.coloring_time = end_coloring - start_coloring;
+        stats.total_time = stats.precolor_time + stats.coloring_time;
+
+        // Calculate remaining colors and total processed
+        stats.remaining_colors = 0;
+        for (int row = 0; row < puzzle.size; row++) {
+            for (int col = 0; col < puzzle.size; col++) {
+                stats.remaining_colors += puzzle.pc_lengths[row][col];
+            }
+        }
+        stats.total_processed = puzzle.size * puzzle.size * puzzle.size;
+
+        if (print_details && stats.found_solution) {
             printf("\nSolution:\n");
             print_board(&puzzle, solution);
-        } else {
-            printf("\nNo solution exists.\n");
         }
-    } else {
-        printf("Failed to read or parse the puzzle.\n");
-    }
-}
-
-int main(int argc, char* argv[]) {
-    if (argc != 2) {
-        printf("Usage: %s <puzzle_file>\n", argv[0]);
-        return 1;
     }
 
-    solve_puzzle(argv[1]);
-    return 0;
+    return stats;
 }

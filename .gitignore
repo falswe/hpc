@@ -5,6 +5,7 @@
 !*/
 # un-ignore all files with extensions
 !*.*
+*.o
 
 # custom vscode files
 .vscode/

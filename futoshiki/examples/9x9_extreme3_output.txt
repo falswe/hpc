@@ -100,7 +100,11 @@ Cell [8][5]: 1 2 3 4 5 6 7 9
 Cell [8][6]: 3 4 5 6 8 9 
 Cell [8][7]: 1 2 3 4 5 6 
 Cell [8][8]: 4 5 6 7 8 9 
-Warning: Old MapAsync APIs are deprecated. If using C please pass a CallbackInfo struct that has two userdatas. Otherwise, if using C++, please use templated helpers.
+
+Timing Results:
+Pre-coloring phase: 0.000463 seconds
+List-coloring phase: 2113.767957 seconds
+Total solving time: 2113.768420 seconds
 
 Solution:
  1 < 8   9 > 6   7   3   4 < 5   2 
