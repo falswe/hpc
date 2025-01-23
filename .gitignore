@@ -5,6 +5,8 @@
 !*/
 # un-ignore all files with extensions
 !*.*
+
+# object files
 *.o
 
 # custom vscode files
