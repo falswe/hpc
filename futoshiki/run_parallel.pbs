@@ -1,0 +1,23 @@
+#!/bin/bash
+
+# PBS directives
+#PBS -N futoshiki_parallel
+#PBS -l select=1:ncpus=16:mpiprocs=4:ompthreads=4
+#PBS -l walltime=01:00:00
+#PBS -q standard_q
+
+# Load MPI module
+module load mpi/openmpi-x86_64
+
+# Set OpenMP environment variable for number of threads
+export OMP_NUM_THREADS=4
+
+# Change to the working directory
+cd $PBS_O_WORKDIR
+
+# Run the parallel Futoshiki solver
+mpirun -np 4 ./futoshiki_parallel 9x9_extreme3_initial.txt
+
+# Compare with and without precoloring
+echo "Running comparison mode..."
+mpirun -np 4 ./futoshiki_parallel 9x9_extreme3_initial.txt -c
