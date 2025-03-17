@@ -1,4 +1,8 @@
+#include "futoshiki.h"
+
 #include <ctype.h>
+#include <omp.h>
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -6,7 +10,6 @@
 #include <sys/time.h>
 
 #include "comparison.h"
-#include "futoshiki.h"
 
 #define MAX_N 50
 #define EMPTY 0
@@ -22,6 +25,31 @@ typedef struct {
                                           // [row][col][possible_values]
     int pc_lengths[MAX_N][MAX_N];         // Possible colors list length for each cell
 } Futoshiki;
+
+static bool g_show_progress = false;
+
+void set_progress_display(bool show) { g_show_progress = show; }
+
+static void print_progress(const char* format, ...) {
+    if (!g_show_progress) return;
+
+    va_list args;
+    va_start(args, format);
+    printf("[PROGRESS] ");
+    vprintf(format, args);
+    printf("\n");
+    va_end(args);
+}
+
+static void print_cell_colors(const Futoshiki* puzzle, int row, int col) {
+    if (!g_show_progress) return;
+
+    printf("[PROGRESS] Cell [%d][%d]: ", row, col);
+    for (int i = 0; i < puzzle->pc_lengths[row][col]; i++) {
+        printf("%d ", puzzle->pc_list[row][col][i]);
+    }
+    printf("\n");
+}
 
 bool safe(const Futoshiki* puzzle, int row, int col, int solution[MAX_N][MAX_N], int color) {
     // If cell has a given color, only allow that color
@@ -115,6 +143,9 @@ bool satisfies_inequalities(const Futoshiki* puzzle, int row, int col, int color
                     return false;
                 }
                 break;
+            case NO_CONS:
+                // Nothing to do
+                break;
         }
     }
 
@@ -129,6 +160,9 @@ bool satisfies_inequalities(const Futoshiki* puzzle, int row, int col, int color
                 if (!has_valid_neighbor(puzzle, row, col + 1, color, true)) {
                     return false;
                 }
+                break;
+            case NO_CONS:
+                // Nothing to do
                 break;
         }
     }
@@ -146,6 +180,9 @@ bool satisfies_inequalities(const Futoshiki* puzzle, int row, int col, int color
                     return false;
                 }
                 break;
+            case NO_CONS:
+                // Nothing to do
+                break;
         }
     }
 
@@ -160,6 +197,9 @@ bool satisfies_inequalities(const Futoshiki* puzzle, int row, int col, int color
                 if (!has_valid_neighbor(puzzle, row + 1, col, color, true)) {
                     return false;
                 }
+                break;
+            case NO_CONS:
+                // Nothing to do
                 break;
         }
     }
@@ -211,6 +251,7 @@ void process_uniqueness(Futoshiki* puzzle, int row, int col) {
 }
 
 int compute_pc_lists(Futoshiki* puzzle, bool use_precoloring) {
+    print_progress("Starting pre-coloring");
     int total_colors_removed = 0;
     int initial_colors = 0;
 
@@ -263,22 +304,26 @@ int compute_pc_lists(Futoshiki* puzzle, bool use_precoloring) {
         } while (changes);
     }
 
+    print_progress("Pre-coloring complete");
     return total_colors_removed;
 }
 
-bool color_g(Futoshiki* puzzle, int solution[MAX_N][MAX_N], int row, int col) {
+// Sequential backtracking algorithm for deeper levels
+bool color_g_seq(Futoshiki* puzzle, int solution[MAX_N][MAX_N], int row, int col) {
+    // Check if we have completed the grid
     if (row >= puzzle->size) {
         return true;
     }
 
+    // Move to the next row when current row is complete
     if (col >= puzzle->size) {
-        return color_g(puzzle, solution, row + 1, 0);
+        return color_g_seq(puzzle, solution, row + 1, 0);
     }
 
     // Skip given cells
     if (puzzle->board[row][col] != EMPTY) {
         solution[row][col] = puzzle->board[row][col];
-        return color_g(puzzle, solution, row, col + 1);
+        return color_g_seq(puzzle, solution, row, col + 1);
     }
 
     // Try each possible color for current cell
@@ -286,14 +331,111 @@ bool color_g(Futoshiki* puzzle, int solution[MAX_N][MAX_N], int row, int col) {
         int color = puzzle->pc_list[row][col][i];
         if (safe(puzzle, row, col, solution, color)) {
             solution[row][col] = color;
-            if (color_g(puzzle, solution, row, col + 1)) {
+            if (color_g_seq(puzzle, solution, row, col + 1)) {
                 return true;
             }
-            solution[row][col] = EMPTY;
+            solution[row][col] = EMPTY;  // Backtrack
         }
     }
 
     return false;
+}
+
+// Parallelization that creates tasks for first level choices
+bool color_g(Futoshiki* puzzle, int solution[MAX_N][MAX_N], int row, int col) {
+    print_progress("Starting parallel backtracking");
+
+    bool found_solution = false;
+
+    // Find first empty cell to parallelize on
+    // TODO: consider the subsequent empty cells for parallelization
+    //       rn only 2 threads are doing the work if there's only 2 colors in the first empty cell
+    //       this could be improved greatly by just going on with other empty cells
+    int start_row = 0, start_col = 0;
+    bool found_empty = false;
+
+    for (int r = 0; r < puzzle->size && !found_empty; r++) {
+        for (int c = 0; c < puzzle->size && !found_empty; c++) {
+            if (puzzle->board[r][c] == EMPTY) {
+                start_row = r;
+                start_col = c;
+                found_empty = true;
+            } else {
+                solution[r][c] = puzzle->board[r][c];
+            }
+        }
+    }
+
+    if (!found_empty) {
+        // No empty cells, puzzle is already solved
+        return true;
+    }
+
+    print_progress("Parallelizing on first empty cell");
+    print_progress("First empty cell at (%d,%d) with %d possible colors", start_row, start_col,
+                   puzzle->pc_lengths[start_row][start_col]);
+
+    // Manually create private copies for each task to avoid issues
+    int num_colors = puzzle->pc_lengths[start_row][start_col];
+    int task_solutions[MAX_N][MAX_N][MAX_N];  // One solution matrix per possible color
+
+#pragma omp parallel
+    {
+#pragma omp single
+        {
+            print_progress("Using %d threads for parallel solving", omp_get_num_threads());
+
+            for (int i = 0; i < num_colors && !found_solution; i++) {
+                int color = puzzle->pc_list[start_row][start_col][i];
+
+                if (safe(puzzle, start_row, start_col, solution, color)) {
+#pragma omp task firstprivate(i, color) shared(found_solution, task_solutions)
+                    {
+                        print_progress("Thread %d trying color %d at (%d,%d)", omp_get_thread_num(),
+                                       color, start_row, start_col);
+
+                        // Create a local copy of the solution
+                        int local_solution[MAX_N][MAX_N];
+                        memcpy(local_solution, solution, sizeof(local_solution));
+
+                        // Set the color for this branch
+                        local_solution[start_row][start_col] = color;
+
+                        // Try to solve using sequential algorithm from this point
+                        if (color_g_seq(puzzle, local_solution, start_row, start_col + 1)) {
+#pragma omp critical
+                            {
+                                if (!found_solution) {
+                                    found_solution = true;
+                                    // Save to task solutions array for the main thread to access
+                                    memcpy(task_solutions[i], local_solution,
+                                           sizeof(local_solution));
+                                    print_progress("Thread %d found solution with color %d",
+                                                   omp_get_thread_num(), color);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            print_progress("Waiting for tasks to complete");
+#pragma omp taskwait
+            print_progress("All tasks completed");
+        }
+    }
+
+    // Copy solution from successful task to output solution matrix
+    if (found_solution) {
+        for (int i = 0; i < num_colors; i++) {
+            if (task_solutions[i][start_row][start_col] != 0) {
+                memcpy(solution, task_solutions[i], sizeof(task_solutions[i]));
+                break;
+            }
+        }
+    }
+
+    return found_solution;
 }
 
 void print_board(const Futoshiki* puzzle, int solution[MAX_N][MAX_N]) {
@@ -337,6 +479,8 @@ void print_board(const Futoshiki* puzzle, int solution[MAX_N][MAX_N]) {
 }
 
 bool parse_futoshiki(const char* input, Futoshiki* puzzle) {
+    print_progress("Parsing puzzle input");
+
     // Initialize everything to 0/NO_CONS
     memset(puzzle->board, 0, sizeof(puzzle->board));
     memset(puzzle->h_cons, NO_CONS, sizeof(puzzle->h_cons));
@@ -436,11 +580,15 @@ bool parse_futoshiki(const char* input, Futoshiki* puzzle) {
         line_start += line_len + (line_start[line_len] == '\n' ? 1 : 0);
     }
 
+    print_progress("Parsing complete");
+    print_progress("Puzzle size: %d x %d", puzzle->size, puzzle->size);
     return true;
 }
 
 // File reading function
 bool read_puzzle_from_file(const char* filename, Futoshiki* puzzle) {
+    print_progress("Reading puzzle file");
+
     FILE* file = fopen(filename, "r");
     if (!file) {
         printf("Error: Could not open file %s\n", filename);
@@ -471,12 +619,12 @@ double get_time() {
     return tv.tv_sec + tv.tv_usec * 1e-6;
 }
 
-SolverStats solve_puzzle(const char* filename, bool use_precoloring, bool print_details) {
+SolverStats solve_puzzle(const char* filename, bool use_precoloring, bool print_solution) {
     SolverStats stats = {0};
     Futoshiki puzzle;
 
     if (read_puzzle_from_file(filename, &puzzle)) {
-        if (print_details) {
+        if (print_solution) {
             printf("Initial puzzle:\n");
             int initial_board[MAX_N][MAX_N];
             memcpy(initial_board, puzzle.board, sizeof(initial_board));
@@ -489,23 +637,21 @@ SolverStats solve_puzzle(const char* filename, bool use_precoloring, bool print_
         double end_precolor = get_time();
         stats.precolor_time = end_precolor - start_precolor;
 
-        if (print_details) {
-            printf("\nPossible colors for each cell:\n");
+        if (print_solution && g_show_progress) {
+            print_progress("Possible colors for each cell:");
             for (int row = 0; row < puzzle.size; row++) {
                 for (int col = 0; col < puzzle.size; col++) {
-                    printf("Cell [%d][%d]: ", row, col);
-                    for (int i = 0; i < puzzle.pc_lengths[row][col]; i++) {
-                        printf("%d ", puzzle.pc_list[row][col][i]);
-                    }
-                    printf("\n");
+                    print_cell_colors(&puzzle, row, col);
                 }
             }
         }
 
         // Time the list-coloring phase
-        int solution[MAX_N][MAX_N] = {0};
+        int solution[MAX_N][MAX_N] = {{0}};
         double start_coloring = get_time();
+
         stats.found_solution = color_g(&puzzle, solution, 0, 0);
+
         double end_coloring = get_time();
         stats.coloring_time = end_coloring - start_coloring;
         stats.total_time = stats.precolor_time + stats.coloring_time;
@@ -519,9 +665,13 @@ SolverStats solve_puzzle(const char* filename, bool use_precoloring, bool print_
         }
         stats.total_processed = puzzle.size * puzzle.size * puzzle.size;
 
-        if (print_details && stats.found_solution) {
-            printf("\nSolution:\n");
-            print_board(&puzzle, solution);
+        if (print_solution) {
+            if (stats.found_solution) {
+                printf("Solution:\n");
+                print_board(&puzzle, solution);
+            } else {
+                printf("No solution found.\n");
+            }
         }
     }
 
