@@ -1,6 +1,5 @@
 #include "comparison.h"
 
-#include <mpi.h>
 #include <stdio.h>
 
 #include "futoshiki.h"
@@ -48,29 +47,4 @@ void run_comparison(const char* filename) {
     print_stats(&with_precolor, "\nWith Precoloring");
     print_stats(&without_precolor, "\nWithout Precoloring");
     print_comparison(&with_precolor, &without_precolor);
-}
-
-void run_comparison_parallel(const char* filename, int rank, int size) {
-    if (rank == 0) {
-        printf("Running comparison mode...\n");
-    }
-
-    // Run with precoloring
-    if (rank == 0) {
-        printf("\nTesting with precoloring enabled...\n");
-    }
-    SolverStats with_precolor = solve_puzzle_parallel(filename, true, false, rank, size);
-
-    // Run without precoloring
-    if (rank == 0) {
-        printf("\nTesting with precoloring disabled...\n");
-    }
-    SolverStats without_precolor = solve_puzzle_parallel(filename, false, false, rank, size);
-
-    // Only the root process prints the results
-    if (rank == 0) {
-        print_stats(&with_precolor, "\nWith Precoloring");
-        print_stats(&without_precolor, "\nWithout Precoloring");
-        print_comparison(&with_precolor, &without_precolor);
-    }
 }

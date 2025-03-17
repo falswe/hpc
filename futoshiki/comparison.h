@@ -22,7 +22,4 @@ void print_comparison(const SolverStats* with_precolor, const SolverStats* witho
 // Run comparison between solver with and without precoloring
 void run_comparison(const char* filename);
 
-// New parallel version of run_comparison
-void run_comparison_parallel(const char* filename, int rank, int size);
-
 #endif  // COMPARISON_H
